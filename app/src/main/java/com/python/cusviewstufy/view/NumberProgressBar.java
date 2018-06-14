@@ -1,12 +1,15 @@
 package com.python.cusviewstufy.view;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
 
 import com.python.cusviewstufy.R;
@@ -17,6 +20,8 @@ import com.python.cusviewstufy.R;
  * @desc
  */
 public class NumberProgressBar extends View {
+
+    private static final String TAG = "NumberProgressBar";
 
     private int mMaxProgress = 100;
 
@@ -65,10 +70,10 @@ public class NumberProgressBar extends View {
      */
     private String mPrefix = "";
 
-    private final int default_progress_max    = 100;
-    private final int default_progress_cur    = 0;
-    private final int default_text_color      = Color.rgb(66, 145, 241);
-    private final int default_reached_color   = Color.rgb(66, 145, 241);
+    private final int default_progress_max = 100;
+    private final int default_progress_cur = 0;
+    private final int default_text_color = Color.rgb(66, 145, 241);
+    private final int default_reached_color = Color.rgb(66, 145, 241);
     private final int default_unreached_color = Color.rgb(204, 204, 204);
     private final float default_progress_text_offset;
     private final float default_text_size;
@@ -79,6 +84,35 @@ public class NumberProgressBar extends View {
      * The progress text offset.
      */
     private float mOffset;
+
+
+    /**
+     * should show text flag
+     */
+    private static final int PROGRESS_TEXT_VISIBLE = 0;
+
+    private boolean mIfTextviewVisible;
+    private String mCurrentDrawText;
+    private Paint mTextPaint;
+    private Paint mReachBarPaint;
+    private Paint mUnreachBarPaint;
+    private float mDrawTextWidth;
+
+    private boolean mDrawReachBar;
+    private boolean mDrawUnreachBar;
+    private float mDrawTextStart;
+    private int mReachBarRectf;
+
+
+    /**
+     * Unreached bar area to draw rect.
+     */
+    private RectF mUnreachedRectF = new RectF(0, 0, 0, 0);
+    /**
+     * Reached bar area rect.
+     */
+    private RectF mReachedRectF = new RectF(0, 0, 0, 0);
+    private int mDrawTextEnd;
 
 
     public NumberProgressBar(Context context) {
@@ -115,8 +149,16 @@ public class NumberProgressBar extends View {
 
         mOffset = typedArray.getDimension(R.styleable.NumberProgressBar_progress_text_offset, 0);
 
+        //show or hide text
+        int textVisible = typedArray.getInt(R.styleable.NumberProgressBar_progress_text_visibility, PROGRESS_TEXT_VISIBLE);
+        if (textVisible == PROGRESS_TEXT_VISIBLE) {
+            mIfTextviewVisible = true;
+        }
+
+        //recycle typedArray
         typedArray.recycle();
 
+        // init paint
         initPaint();
 
     }
@@ -129,8 +171,8 @@ public class NumberProgressBar extends View {
 
     private int measure(int measureSpec, boolean isWidth) {
         int result;
-        int size    = MeasureSpec.getSize(measureSpec);
-        int mode    = MeasureSpec.getMode(measureSpec);
+        int size = MeasureSpec.getSize(measureSpec);
+        int mode = MeasureSpec.getMode(measureSpec);
         int padding = isWidth ? getPaddingRight() + getPaddingLeft() : getPaddingBottom() + getPaddingTop();
         if (mode == MeasureSpec.EXACTLY) {
             result = size;
@@ -154,10 +196,84 @@ public class NumberProgressBar extends View {
         super.onDraw(canvas);
 
         //是否文字
+        if (mIfTextviewVisible) {
+            calculateDrawRectF();
+        } else {
+            calculateDrawRectFWithoutProgressText();
+        }
 
         //画reachbar
+        if (mDrawReachBar) {
+            canvas.drawRect(mReachedRectF, mReachBarPaint);
+        }
 
         //画unreachbar
+        if (mDrawUnreachBar) {
+            canvas.drawRect(mUnreachedRectF, mUnreachBarPaint);
+        }
+
+        if (mIfTextviewVisible) {
+            canvas.drawText(mCurrentDrawText, mDrawTextStart, mDrawTextEnd, mTextPaint);
+        }
+
+
+    }
+
+
+    private void calculateDrawRectFWithoutProgressText() {
+
+        mReachedRectF.left = getPaddingLeft();
+        mReachedRectF.top = getHeight() / 2.0f - mReachedBarHeight / 2.0f;
+        mReachedRectF.right = (getWidth() - getPaddingLeft() - getPaddingRight()) / (getMax() * 1.0f) * getProgress() + getPaddingLeft();
+        mReachedRectF.bottom = getHeight() / 2.0f + mReachedBarHeight / 2.0f;
+
+        //处理unreachbar的绘制区域
+        mUnreachedRectF.left = mReachedRectF.right;
+        mUnreachedRectF.top = getHeight() / 2.0f - mUnreachedBarHeight / 2.0f;
+        mUnreachedRectF.right = getWidth() - getPaddingRight();
+        mUnreachedRectF.bottom = getHeight() / 2.0f + mUnreachedBarHeight / 2.0f;
+
+    }
+
+    @SuppressLint("DefaultLocale")
+    private void calculateDrawRectF() {
+
+        //处理最终显示的文字
+        mCurrentDrawText = String.format("%d", getProgress() * 100 / getMax());
+        mCurrentDrawText = mPrefix + mCurrentDrawText + mSuffix;
+        //Return the width of the text.
+        mDrawTextWidth = mTextPaint.measureText(mCurrentDrawText);
+
+        if (getProgress() == 0) {    //进度是0
+            mDrawReachBar = false;
+            mDrawTextStart = getPaddingLeft();
+        } else {
+            mDrawReachBar = true;
+            //处理reachBar的绘制区域
+            mReachedRectF.left = getPaddingLeft();
+            mReachedRectF.top = getHeight() / 2.0f - mReachedBarHeight / 2.0f;
+            mReachedRectF.right = (getWidth() - getPaddingLeft() - getPaddingRight()) / (getMax() * 1.0f) * getProgress() + getPaddingLeft() - mOffset;
+            mReachedRectF.bottom = getHeight() / 2.0f + mReachedBarHeight / 2.0f;
+            mDrawTextStart = mReachedRectF.right + mOffset;
+        }
+
+        mDrawTextEnd = (int) ((getHeight() / 2.0f) - ((mTextPaint.descent() + mTextPaint.ascent()) / 2.0f));
+        if (mDrawTextStart + mDrawTextWidth >= getWidth() - getPaddingRight()) {
+            mDrawTextStart = getWidth() - getPaddingRight() - mDrawTextWidth;
+            mReachedRectF.right = mDrawTextStart - mOffset;
+        }
+
+        float unreachedBarStart = mDrawTextStart + mDrawTextWidth + mOffset;
+        if (unreachedBarStart >= getWidth() - getPaddingRight()) {
+            mDrawUnreachBar = false;
+        } else {
+            mDrawUnreachBar = true;
+            //处理unreachbar的绘制区域
+            mUnreachedRectF.left = unreachedBarStart;
+            mUnreachedRectF.top = getHeight() / 2.0f - mUnreachedBarHeight / 2.0f;
+            mUnreachedRectF.right = getWidth() - getPaddingRight();
+            mUnreachedRectF.bottom = getHeight() / 2.0f + mUnreachedBarHeight / 2.0f;
+        }
 
     }
 
@@ -172,41 +288,55 @@ public class NumberProgressBar extends View {
     }
 
     private void initPaint() {
-        Paint textPaint = new Paint();
-        textPaint.setColor(mTextColor);
-        textPaint.setTextSize(mTextSize);
-        textPaint.setAntiAlias(true);
-        textPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mTextPaint = new Paint();
+        mTextPaint.setColor(mTextColor);
+        mTextPaint.setTextSize(mTextSize);
+        mTextPaint.setAntiAlias(true);
+        mTextPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
 
-        Paint reachBarPaint = new Paint();
-        reachBarPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
-        reachBarPaint.setColor(mReachedBarColor);
+        mReachBarPaint = new Paint();
+        mReachBarPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mReachBarPaint.setColor(mReachedBarColor);
 
-        Paint unreachBarPaint = new Paint();
-        unreachBarPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
-        unreachBarPaint.setColor(mUnreachedBarColor);
+        mUnreachBarPaint = new Paint();
+        mUnreachBarPaint.setFlags(Paint.ANTI_ALIAS_FLAG);
+        mUnreachBarPaint.setColor(mUnreachedBarColor);
     }
 
-    private void setProgress(int currentProgress) {
-
+    public void setProgress(int currentProgress) {
         if (currentProgress <= getMax() && currentProgress >= 0) {
             mCurrentProgress = currentProgress;
-            invalidate();
+//            invalidate();
+            postInvalidate();
         }
-
     }
 
-    private int getMax() {
+
+    public int getProgress() {
+        return mCurrentProgress;
+    }
+
+    public int getMax() {
         return mMaxProgress;
     }
 
-    private void setMaxProgress(int maxProgress) {
+    public void setMaxProgress(int maxProgress) {
         if (maxProgress > 0) {
             mMaxProgress = maxProgress;
             invalidate();
         }
     }
 
+
+    public void incrementProgressBy(int by) {
+        if (by > 0) {
+            setProgress(getProgress() + by);
+        }
+
+        if (onProgressBarListener != null) {
+            onProgressBarListener.onProgressChange(getProgress(), getMax());
+        }
+    }
 
     public float dp2px(float dp) {
         final float scale = getResources().getDisplayMetrics().density;
@@ -216,6 +346,16 @@ public class NumberProgressBar extends View {
     public float sp2px(float sp) {
         final float scale = getResources().getDisplayMetrics().scaledDensity;
         return sp * scale;
+    }
+
+    OnProgressBarListener onProgressBarListener;
+
+    public interface OnProgressBarListener {
+        void onProgressChange(int progress, int max);
+    }
+
+    public void setOnProgressBarListener(OnProgressBarListener onProgressBarListener) {
+        this.onProgressBarListener = onProgressBarListener;
     }
 
 

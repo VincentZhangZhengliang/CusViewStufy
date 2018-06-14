@@ -6,14 +6,15 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <com.jcodecraeer.xrecyclerview.XRecyclerView
-        android:id="@+id/xrecyclerview"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
-
     <com.python.cusviewstufy.view.PagerLayout
         android:id="@+id/id_pl"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+
+    <Button
+        android:id="@+id/id_number_progress_bar"
+        android:layout_width="match_parent"
+        android:layout_height="50dp" />
 
 </RelativeLayout>
